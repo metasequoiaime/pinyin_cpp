@@ -1,6 +1,6 @@
 # About
 
-This is a template for c++ in Windows.
+This is a template for C++ in Windows using package manager vcpkg.
 
 I use the tool chains below:
 
@@ -13,5 +13,3 @@ I use the tool chains below:
 Of course, you can replace Neovim with VSCode.
 
 Have fun crating windowsa with C++ in Windows11.
-
-![](https://i.ibb.co/C3gqVTQK/image.png)
