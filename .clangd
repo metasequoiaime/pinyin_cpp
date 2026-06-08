@@ -3,7 +3,7 @@ CompileFlags:
       -DUNICODE,
       -D_UNICODE,
       "-std=c++17", # needed when using MSVC
-      "-IC:/Users/SonnyCalcr/EDisk/TemplateCodes/WinCppTemplateWithVcpkg/build/vcpkg_installed/x64-windows/include",
+      "-IC:/Users/SonnyCalcr/EDisk/IMECodes/Experiments/pinyin_expe/pinyin_cpp/build/vcpkg_installed/x64-windows/include",
       -Wno-microsoft-goto,
       -Wno-nonportable-include-path,
       -Wno-microsoft-extra-qualification,
