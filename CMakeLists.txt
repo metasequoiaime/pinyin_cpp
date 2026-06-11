@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25.0)
-project(WinCppTemplateWithVcpkg VERSION 1.0)
+project(pinyin_cpp VERSION 1.0)
 
 # Specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -14,13 +14,17 @@ add_definitions(
 
 # fmt
 find_package(fmt REQUIRED)
+find_package(SQLite3 REQUIRED)
 
-set(MY_EXECUTABLE_NAME "WinCppTemplateWithVcpkg")
+set(MY_EXECUTABLE_NAME "pinyin_cpp")
 set(
   SOURCE_FILES
   "./src/main.cpp"
+  "./src/pinyin_query.cpp"
 )
 
 add_executable(${MY_EXECUTABLE_NAME} ${SOURCE_FILES})
 
-target_link_libraries(${MY_EXECUTABLE_NAME} PRIVATE fmt::fmt)
+target_include_directories(${MY_EXECUTABLE_NAME} PRIVATE "./src")
+
+target_link_libraries(${MY_EXECUTABLE_NAME} PRIVATE fmt::fmt SQLite3::SQLite3)
