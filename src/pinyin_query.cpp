@@ -13,7 +13,7 @@ namespace pinyin
 namespace
 {
 
-constexpr const char *kDefaultDbPath = R"(C:\Users\SonnyCalcr\EDisk\CppCodes\IMECodes\MetasequoiaImeDict\makecikudb\quanpindb\makedb\multi_table_has_jp\out\quanpin_multi_tbl_has_jp.db)";
+constexpr const char *kDefaultDbPath = R"(C:\Users\sonnycalcr\AppData\Local\MetasequoiaImeTsf\quanpin_multi_tbl_has_jp.db)";
 
 const std::vector<std::string> &IntactPinyinList()
 {

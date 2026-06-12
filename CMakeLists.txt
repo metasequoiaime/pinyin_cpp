@@ -27,4 +27,4 @@ add_executable(${MY_EXECUTABLE_NAME} ${SOURCE_FILES})
 
 target_include_directories(${MY_EXECUTABLE_NAME} PRIVATE "./src")
 
-target_link_libraries(${MY_EXECUTABLE_NAME} PRIVATE fmt::fmt SQLite3::SQLite3)
+target_link_libraries(${MY_EXECUTABLE_NAME} PRIVATE fmt::fmt SQLite::SQLite3)
