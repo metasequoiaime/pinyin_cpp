@@ -6,6 +6,7 @@
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace pinyin
@@ -154,6 +155,14 @@ std::string BuildKeyLikePattern(const Segments &segments)
     return Join(parts, "'");
 }
 
+std::pair<std::string, std::string> BuildKeyRange(const Segments &segments)
+{
+    const auto lower = Join(segments, "'");
+    std::string upper = lower;
+    upper.push_back(static_cast<char>(0x7f));
+    return {lower, upper};
+}
+
 bool IsPureJpInput(const Segments &segments)
 {
     return std::all_of(segments.begin(), segments.end(), [](const std::string &s) { return s.size() == 1; });
@@ -244,6 +253,13 @@ class SqliteDb
 
     ~SqliteDb()
     {
+        for (auto &[sql, stmt] : statement_cache_)
+        {
+            if (stmt != nullptr)
+            {
+                sqlite3_finalize(stmt);
+            }
+        }
         if (db_ != nullptr)
         {
             sqlite3_close(db_);
@@ -258,15 +274,43 @@ class SqliteDb
         return db_;
     }
 
+    sqlite3_stmt *GetOrPrepareStatement(const std::string &sql)
+    {
+        const auto found = statement_cache_.find(sql);
+        if (found != statement_cache_.end())
+        {
+            sqlite3_reset(found->second);
+            sqlite3_clear_bindings(found->second);
+            return found->second;
+        }
+
+        sqlite3_stmt *stmt = nullptr;
+        if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+        {
+            return nullptr;
+        }
+
+        statement_cache_.emplace(sql, stmt);
+        return stmt;
+    }
+
   private:
     sqlite3 *db_ = nullptr;
+    std::unordered_map<std::string, sqlite3_stmt *> statement_cache_;
 };
 
-std::vector<QueryItem> RunQuery(sqlite3 *db, const std::string &sql, const std::string &value, int limit)
+std::vector<QueryItem> RunQuery(SqliteDb &db, const std::string &sql, const std::string &value, int limit, QuerySqlProfile *profile = nullptr)
 {
-    sqlite3_stmt *stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+    const auto start = std::chrono::steady_clock::now();
+    sqlite3_stmt *stmt = db.GetOrPrepareStatement(sql);
+    if (stmt == nullptr)
     {
+        if (profile != nullptr)
+        {
+            profile->lookup_value = value;
+            profile->elapsed = std::chrono::steady_clock::now() - start;
+            profile->row_count = 0;
+        }
         return {};
     }
 
@@ -274,44 +318,199 @@ std::vector<QueryItem> RunQuery(sqlite3 *db, const std::string &sql, const std::
     sqlite3_bind_int(stmt, 2, limit);
 
     std::vector<QueryItem> rows;
-    while (sqlite3_step(stmt) == SQLITE_ROW)
+    int step_result = SQLITE_ROW;
+    while ((step_result = sqlite3_step(stmt)) == SQLITE_ROW)
     {
         const unsigned char *text = sqlite3_column_text(stmt, 0);
         const int weight = sqlite3_column_int(stmt, 1);
         rows.emplace_back(text == nullptr ? "" : reinterpret_cast<const char *>(text), weight);
     }
-    sqlite3_finalize(stmt);
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
+
+    if (profile != nullptr)
+    {
+        profile->lookup_value = value;
+        profile->elapsed = std::chrono::steady_clock::now() - start;
+        profile->row_count = static_cast<int>(rows.size());
+    }
     return rows;
 }
 
-std::vector<QueryItem> QuerySingleCut(sqlite3 *db, const Segments &segments, int limit)
+std::vector<QueryItem> RunRangeQuery(
+    SqliteDb &db,
+    const std::string &sql,
+    const std::string &lower,
+    const std::string &upper,
+    int limit,
+    QuerySqlProfile *profile = nullptr)
 {
+    const auto start = std::chrono::steady_clock::now();
+    sqlite3_stmt *stmt = db.GetOrPrepareStatement(sql);
+    if (stmt == nullptr)
+    {
+        if (profile != nullptr)
+        {
+            profile->lookup_value = lower + " .. " + upper;
+            profile->elapsed = std::chrono::steady_clock::now() - start;
+            profile->row_count = 0;
+        }
+        return {};
+    }
+
+    sqlite3_bind_text(stmt, 1, lower.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, upper.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 3, limit);
+
+    std::vector<QueryItem> rows;
+    int step_result = SQLITE_ROW;
+    while ((step_result = sqlite3_step(stmt)) == SQLITE_ROW)
+    {
+        const unsigned char *text = sqlite3_column_text(stmt, 0);
+        const int weight = sqlite3_column_int(stmt, 1);
+        rows.emplace_back(text == nullptr ? "" : reinterpret_cast<const char *>(text), weight);
+    }
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
+
+    if (profile != nullptr)
+    {
+        profile->lookup_value = lower + " .. " + upper;
+        profile->elapsed = std::chrono::steady_clock::now() - start;
+        profile->row_count = static_cast<int>(rows.size());
+    }
+    return rows;
+}
+
+std::vector<QueryItem> QuerySingleCut(SqliteDb &db, const Segments &segments, int limit, QueryCutProfile *profile = nullptr)
+{
+    const auto start = std::chrono::steady_clock::now();
     const auto table = BuildTableName(segments);
     const auto key = SegmentsToKey(segments);
     const auto jp = SegmentsToJp(segments);
-    const auto key_like_pattern = BuildKeyLikePattern(segments);
+    const auto [key_range_lower, key_range_upper] = BuildKeyRange(segments);
+
+    if (profile != nullptr)
+    {
+        profile->segments = segments;
+        profile->table = table;
+        profile->key = key;
+        profile->sql_profiles.clear();
+    }
 
     const auto exact_sql = "SELECT \"value\", \"weight\" FROM \"" + table + "\" WHERE \"key\" = ? ORDER BY \"weight\" DESC LIMIT ?";
-    auto rows = RunQuery(db, exact_sql, key, limit);
+    QuerySqlProfile exact_profile{"exact"};
+    auto rows = RunQuery(db, exact_sql, key, limit, profile != nullptr ? &exact_profile : nullptr);
+    if (profile != nullptr)
+    {
+        profile->sql_profiles.push_back(exact_profile);
+    }
     if (!rows.empty())
     {
+        if (profile != nullptr)
+        {
+            profile->elapsed = std::chrono::steady_clock::now() - start;
+        }
         return rows;
     }
 
-    const auto prefix_sql = "SELECT \"value\", \"weight\" FROM \"" + table + "\" WHERE \"key\" LIKE ? ORDER BY \"weight\" DESC LIMIT ?";
-    rows = RunQuery(db, prefix_sql, key_like_pattern, limit);
+    const auto prefix_sql =
+        "SELECT \"value\", \"weight\" FROM \"" + table + "\" "
+        "WHERE \"key\" >= ? AND \"key\" < ? ORDER BY \"weight\" DESC LIMIT ?";
+    QuerySqlProfile prefix_profile{"prefix"};
+    rows = RunRangeQuery(db, prefix_sql, key_range_lower, key_range_upper, limit, profile != nullptr ? &prefix_profile : nullptr);
+    if (profile != nullptr)
+    {
+        profile->sql_profiles.push_back(prefix_profile);
+    }
     if (!rows.empty())
     {
+        if (profile != nullptr)
+        {
+            profile->elapsed = std::chrono::steady_clock::now() - start;
+        }
         return rows;
     }
 
     if (!IsPureJpInput(segments))
     {
+        if (profile != nullptr)
+        {
+            profile->elapsed = std::chrono::steady_clock::now() - start;
+        }
         return {};
     }
 
     const auto jp_sql = "SELECT \"value\", \"weight\" FROM \"" + table + "\" WHERE \"jp\" = ? ORDER BY \"weight\" DESC LIMIT ?";
-    return RunQuery(db, jp_sql, jp, limit);
+    QuerySqlProfile jp_profile{"jp"};
+    rows = RunQuery(db, jp_sql, jp, limit, profile != nullptr ? &jp_profile : nullptr);
+    if (profile != nullptr)
+    {
+        profile->sql_profiles.push_back(jp_profile);
+        profile->elapsed = std::chrono::steady_clock::now() - start;
+    }
+    return rows;
+}
+
+ProfiledQueryResult QueryWordsProfiledWithDb(
+    SqliteDb &db,
+    const std::string &pinyin,
+    const std::string &mode,
+    int limit,
+    std::chrono::steady_clock::duration db_open_elapsed)
+{
+    QueryProfile profile;
+    const auto total_start = std::chrono::steady_clock::now();
+
+    std::vector<Segments> cuts;
+    const auto cut_start = std::chrono::steady_clock::now();
+    if (mode == "greedy")
+    {
+        cuts = CutPinyinGreedy(pinyin, false, true);
+    }
+    else if (mode == "correction" || mode == "fuzzy")
+    {
+        cuts = CutPinyinByMode(pinyin, mode, DefaultFuzzyRules(), true);
+    }
+    else
+    {
+        throw std::invalid_argument("Unknown mode: " + mode);
+    }
+    profile.cut_elapsed = std::chrono::steady_clock::now() - cut_start;
+    profile.raw_cut_count = cuts.size();
+
+    QueryResult result{pinyin, mode, {}};
+    if (cuts.empty())
+    {
+        profile.db_open_elapsed = db_open_elapsed;
+        profile.total = std::chrono::steady_clock::now() - total_start;
+        return {std::move(result), std::move(profile)};
+    }
+
+    std::vector<Segments> unique_cuts;
+    const auto dedupe_start = std::chrono::steady_clock::now();
+    for (const auto &cut : cuts)
+    {
+        if (std::find(unique_cuts.begin(), unique_cuts.end(), cut) == unique_cuts.end())
+        {
+            unique_cuts.push_back(cut);
+        }
+    }
+    profile.dedupe_elapsed = std::chrono::steady_clock::now() - dedupe_start;
+    profile.unique_cut_count = unique_cuts.size();
+    profile.db_open_elapsed = db_open_elapsed;
+
+    const auto db_query_start = std::chrono::steady_clock::now();
+    for (const auto &segments : unique_cuts)
+    {
+        QueryCutProfile cut_profile;
+        auto items = QuerySingleCut(db, segments, limit, &cut_profile);
+        result.results.push_back(QueryResultEntry{segments, SegmentsToKey(segments), BuildTableName(segments), std::move(items)});
+        profile.cut_profiles.push_back(std::move(cut_profile));
+    }
+    profile.db_query_elapsed = std::chrono::steady_clock::now() - db_query_start;
+    profile.total = std::chrono::steady_clock::now() - total_start;
+    return {std::move(result), std::move(profile)};
 }
 
 std::vector<Segments> CutPinyinByModeNoBreak(const std::string &pinyin, const std::string &mode, const std::vector<FuzzyRule> &fuzzy_rules)
@@ -493,41 +692,40 @@ std::vector<Segments> CutPinyinByMode(const std::string &pinyin, const std::stri
 
 QueryResult QueryWords(const std::string &pinyin, const std::string &db_path, const std::string &mode, int limit)
 {
-    std::vector<Segments> cuts;
-    if (mode == "greedy")
-    {
-        cuts = CutPinyinGreedy(pinyin, false, true);
-    }
-    else if (mode == "correction" || mode == "fuzzy")
-    {
-        cuts = CutPinyinByMode(pinyin, mode, DefaultFuzzyRules(), true);
-    }
-    else
-    {
-        throw std::invalid_argument("Unknown mode: " + mode);
-    }
+    return QueryWordsProfiled(pinyin, db_path, mode, limit).result;
+}
 
-    QueryResult result{pinyin, mode, {}};
-    if (cuts.empty())
-    {
-        return result;
-    }
-
-    std::vector<Segments> unique_cuts;
-    for (const auto &cut : cuts)
-    {
-        if (std::find(unique_cuts.begin(), unique_cuts.end(), cut) == unique_cuts.end())
-        {
-            unique_cuts.push_back(cut);
-        }
-    }
-
+ProfiledQueryResult QueryWordsProfiled(const std::string &pinyin, const std::string &db_path, const std::string &mode, int limit)
+{
+    const auto db_open_start = std::chrono::steady_clock::now();
     SqliteDb db(db_path);
-    for (const auto &segments : unique_cuts)
+    const auto db_open_elapsed = std::chrono::steady_clock::now() - db_open_start;
+    return QueryWordsProfiledWithDb(db, pinyin, mode, limit, db_open_elapsed);
+}
+
+std::vector<ProfiledQueryResult> QueryWordsProfiledMany(
+    const std::vector<std::string> &pinyins,
+    const std::string &db_path,
+    const std::string &mode,
+    int limit)
+{
+    if (pinyins.empty())
     {
-        result.results.push_back(QueryResultEntry{segments, SegmentsToKey(segments), BuildTableName(segments), QuerySingleCut(db.get(), segments, limit)});
+        return {};
     }
-    return result;
+
+    const auto db_open_start = std::chrono::steady_clock::now();
+    SqliteDb db(db_path);
+    const auto db_open_elapsed = std::chrono::steady_clock::now() - db_open_start;
+
+    std::vector<ProfiledQueryResult> profiled_results;
+    profiled_results.reserve(pinyins.size());
+    for (size_t i = 0; i < pinyins.size(); ++i)
+    {
+        const auto open_elapsed = i == 0 ? db_open_elapsed : std::chrono::steady_clock::duration::zero();
+        profiled_results.push_back(QueryWordsProfiledWithDb(db, pinyins[i], mode, limit, open_elapsed));
+    }
+    return profiled_results;
 }
 
 std::vector<QueryItem> QueryWordsFlat(const std::string &pinyin, const std::string &db_path, const std::string &mode, int limit)
