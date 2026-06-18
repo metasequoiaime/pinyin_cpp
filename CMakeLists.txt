@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25.0)
-project(pinyin_cpp VERSION 1.0)
+project(quanpin_cpp VERSION 1.0)
 
 # Specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -16,11 +16,11 @@ add_definitions(
 find_package(fmt REQUIRED)
 find_package(SQLite3 REQUIRED)
 
-set(MY_EXECUTABLE_NAME "pinyin_cpp")
+set(MY_EXECUTABLE_NAME "quanpin_cpp")
 set(
   SOURCE_FILES
   "./src/main.cpp"
-  "./src/pinyin_query.cpp"
+  "./src/quanpin_query.cpp"
 )
 
 add_executable(${MY_EXECUTABLE_NAME} ${SOURCE_FILES})

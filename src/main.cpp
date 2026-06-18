@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "pinyin_query.h"
+#include "quanpin_query.h"
 
 namespace
 {
@@ -16,7 +16,7 @@ double ToMilliseconds(std::chrono::steady_clock::duration duration)
     return std::chrono::duration<double, std::milli>(duration).count();
 }
 
-std::vector<std::string> DefaultPinyins()
+std::vector<std::string> DefaultQuanpins()
 {
     return {
         "a",
@@ -138,7 +138,11 @@ std::vector<std::string> DefaultPinyins()
         "qingdengyixia",
         "wozhidaole",
         "wohaizaixiang",
-        "zhegeshihendaidewenti"};
+        "zhegeshihendaidewenti",
+        "ganm",
+        "yig",
+        "kanl"
+    };
 }
 
 std::string QueryLabel(size_t index)
@@ -147,16 +151,16 @@ std::string QueryLabel(size_t index)
     {
         return "first query";
     }
-    return fmt::format("query #{} (same db connection, different pinyin, no open cost)", index + 1);
+    return fmt::format("query #{} (same db connection, different quanpin, no open cost)", index + 1);
 }
 
-void PrintProfile(const char *label, const pinyin::ProfiledQueryResult &profiled)
+void PrintProfile(const char *label, const quanpin::ProfiledQueryResult &profiled)
 {
     const auto &result = profiled.result;
     const auto &profile = profiled.profile;
 
     fmt::print("{}\n", label);
-    fmt::print("query \"{}\" ({})\n", result.pinyin, result.mode);
+    fmt::print("query \"{}\" ({})\n", result.quanpin, result.mode);
     fmt::print("total: {:.3f} ms\n", ToMilliseconds(profile.total));
     fmt::print(
         "breakdown: cut={:.3f} ms, dedupe={:.3f} ms, db_open={:.3f} ms, db_query={:.3f} ms\n",
@@ -210,16 +214,16 @@ void PrintProfile(const char *label, const pinyin::ProfiledQueryResult &profiled
 
 int main()
 {
-    std::vector<std::string> pinyins;
+    std::vector<std::string> quanpins;
     std::string mode = "correction";
-    std::string db_path = pinyin::DefaultDbPath();
+    std::string db_path = quanpin::DefaultDbPath();
 
-    pinyins = DefaultPinyins();
+    quanpins = DefaultQuanpins();
 
     try
     {
-        const auto profiled_results = pinyin::QueryWordsProfiledMany(
-            pinyins,
+        const auto profiled_results = quanpin::QueryWordsProfiledMany(
+            quanpins,
             db_path,
             mode,
             80);

@@ -1,4 +1,4 @@
-#include "pinyin_query.h"
+#include "quanpin_query.h"
 
 #include <sqlite3.h>
 
@@ -9,14 +9,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace pinyin
+namespace quanpin
 {
 namespace
 {
 
 constexpr const char *kDefaultDbPath = R"(C:\Users\sonnycalcr\AppData\Local\MetasequoiaImeTsf\quanpin_multi_tbl_has_jp.db)";
 
-const std::vector<std::string> &IntactPinyinList()
+const std::vector<std::string> &IntactQuanpinList()
 {
     static const std::vector<std::string> kList = {
         "a",     "ai",    "an",   "ang",   "ao",    "ba",   "bai",   "ban",   "bang",  "bao",  "bei",   "ben",   "beng",   "bi",    "bian",  "biao", "bie",   "bin",  "bing",  "bo",    "bu",     "ca",   "cai",  "can",  "cang", "cao",  "ce",   "cen",  "ceng", "cha",  "chai",  "chan",
@@ -35,17 +35,17 @@ const std::vector<std::string> &IntactPinyinList()
     return kList;
 }
 
-const std::unordered_set<std::string> &IntactPinyinSet()
+const std::unordered_set<std::string> &IntactQuanpinSet()
 {
-    static const std::unordered_set<std::string> kSet(IntactPinyinList().begin(), IntactPinyinList().end());
+    static const std::unordered_set<std::string> kSet(IntactQuanpinList().begin(), IntactQuanpinList().end());
     return kSet;
 }
 
-const std::unordered_set<std::string> &AllPinyinSet()
+const std::unordered_set<std::string> &AllQuanpinSet()
 {
     static const std::unordered_set<std::string> kSet = [] {
         std::unordered_set<std::string> result;
-        for (const auto &item : IntactPinyinList())
+        for (const auto &item : IntactQuanpinList())
         {
             for (size_t i = 1; i <= item.size(); ++i)
             {
@@ -168,12 +168,12 @@ bool IsPureJpInput(const Segments &segments)
     return std::all_of(segments.begin(), segments.end(), [](const std::string &s) { return s.size() == 1; });
 }
 
-std::string FindLongestPrefix(const std::string &pinyin, const std::unordered_set<std::string> &pinyin_set)
+std::string FindLongestPrefix(const std::string &quanpin, const std::unordered_set<std::string> &quanpin_set)
 {
-    for (size_t end = pinyin.size(); end > 0; --end)
+    for (size_t end = quanpin.size(); end > 0; --end)
     {
-        const auto candidate = pinyin.substr(0, end);
-        if (pinyin_set.find(candidate) != pinyin_set.end())
+        const auto candidate = quanpin.substr(0, end);
+        if (quanpin_set.find(candidate) != quanpin_set.end())
         {
             return candidate;
         }
@@ -188,20 +188,20 @@ std::string SwapAdjacent(const std::string &s, size_t index)
     return out;
 }
 
-std::pair<std::string, size_t> CorrectFirstSyllableBySwap(const std::string &pinyin)
+std::pair<std::string, size_t> CorrectFirstSyllableBySwap(const std::string &quanpin)
 {
-    const auto partial = FindLongestPrefix(pinyin, AllPinyinSet());
-    if (partial.empty() || partial.size() >= pinyin.size())
+    const auto partial = FindLongestPrefix(quanpin, AllQuanpinSet());
+    if (partial.empty() || partial.size() >= quanpin.size())
     {
         return {};
     }
-    for (size_t end = pinyin.size(); end > partial.size(); --end)
+    for (size_t end = quanpin.size(); end > partial.size(); --end)
     {
-        const auto candidate = pinyin.substr(0, end);
+        const auto candidate = quanpin.substr(0, end);
         for (size_t index = 0; index + 1 < candidate.size(); ++index)
         {
             const auto corrected = SwapAdjacent(candidate, index);
-            if (IntactPinyinSet().find(corrected) != IntactPinyinSet().end())
+            if (IntactQuanpinSet().find(corrected) != IntactQuanpinSet().end())
             {
                 return {corrected, end};
             }
@@ -210,9 +210,9 @@ std::pair<std::string, size_t> CorrectFirstSyllableBySwap(const std::string &pin
     return {};
 }
 
-std::string ApplyFuzzyRulesGlobally(const std::string &pinyin, const std::vector<FuzzyRule> &fuzzy_rules)
+std::string ApplyFuzzyRulesGlobally(const std::string &quanpin, const std::vector<FuzzyRule> &fuzzy_rules)
 {
-    std::string changed = pinyin;
+    std::string changed = quanpin;
     for (const auto &rule : fuzzy_rules)
     {
         if (!rule.enabled)
@@ -454,7 +454,7 @@ std::vector<QueryItem> QuerySingleCut(SqliteDb &db, const Segments &segments, in
 
 ProfiledQueryResult QueryWordsProfiledWithDb(
     SqliteDb &db,
-    const std::string &pinyin,
+    const std::string &quanpin,
     const std::string &mode,
     int limit,
     std::chrono::steady_clock::duration db_open_elapsed)
@@ -466,11 +466,11 @@ ProfiledQueryResult QueryWordsProfiledWithDb(
     const auto cut_start = std::chrono::steady_clock::now();
     if (mode == "greedy")
     {
-        cuts = CutPinyinGreedy(pinyin, false, true);
+        cuts = CutQuanpinGreedy(quanpin, false, true);
     }
     else if (mode == "correction" || mode == "fuzzy")
     {
-        cuts = CutPinyinByMode(pinyin, mode, DefaultFuzzyRules(), true);
+        cuts = CutQuanpinByMode(quanpin, mode, DefaultFuzzyRules(), true);
     }
     else
     {
@@ -479,7 +479,7 @@ ProfiledQueryResult QueryWordsProfiledWithDb(
     profile.cut_elapsed = std::chrono::steady_clock::now() - cut_start;
     profile.raw_cut_count = cuts.size();
 
-    QueryResult result{pinyin, mode, {}};
+    QueryResult result{quanpin, mode, {}};
     if (cuts.empty())
     {
         profile.db_open_elapsed = db_open_elapsed;
@@ -513,20 +513,20 @@ ProfiledQueryResult QueryWordsProfiledWithDb(
     return {std::move(result), std::move(profile)};
 }
 
-std::vector<Segments> CutPinyinByModeNoBreak(const std::string &pinyin, const std::string &mode, const std::vector<FuzzyRule> &fuzzy_rules)
+std::vector<Segments> CutQuanpinByModeNoBreak(const std::string &quanpin, const std::string &mode, const std::vector<FuzzyRule> &fuzzy_rules)
 {
     if (mode == "fuzzy")
     {
         std::vector<Segments> ans;
-        auto base = CutPinyinGreedy(pinyin, false, false);
+        auto base = CutQuanpinGreedy(quanpin, false, false);
         if (!base.empty())
         {
             ans.insert(ans.end(), base.begin(), base.end());
         }
-        const auto fuzzy_pinyin = ApplyFuzzyRulesGlobally(pinyin, fuzzy_rules);
-        if (fuzzy_pinyin != pinyin)
+        const auto fuzzy_quanpin = ApplyFuzzyRulesGlobally(quanpin, fuzzy_rules);
+        if (fuzzy_quanpin != quanpin)
         {
-            auto fuzzy_cut = CutPinyinGreedy(fuzzy_pinyin, false, false);
+            auto fuzzy_cut = CutQuanpinGreedy(fuzzy_quanpin, false, false);
             if (!fuzzy_cut.empty() && std::find(ans.begin(), ans.end(), fuzzy_cut.front()) == ans.end())
             {
                 ans.insert(ans.end(), fuzzy_cut.begin(), fuzzy_cut.end());
@@ -541,7 +541,7 @@ std::vector<Segments> CutPinyinByModeNoBreak(const std::string &pinyin, const st
             return {{}};
         }
 
-        const auto first = FindLongestPrefix(rest, AllPinyinSet());
+        const auto first = FindLongestPrefix(rest, AllQuanpinSet());
         if (first.empty())
         {
             return {};
@@ -566,7 +566,7 @@ std::vector<Segments> CutPinyinByModeNoBreak(const std::string &pinyin, const st
             return prepend(first, cut_recursive(rest.substr(first.size())));
         }
 
-        if (IntactPinyinSet().find(first) != IntactPinyinSet().end())
+        if (IntactQuanpinSet().find(first) != IntactQuanpinSet().end())
         {
             auto tails = cut_recursive(rest.substr(first.size()));
             if (!tails.empty())
@@ -594,7 +594,7 @@ std::vector<Segments> CutPinyinByModeNoBreak(const std::string &pinyin, const st
         return {};
     };
 
-    return cut_recursive(pinyin);
+    return cut_recursive(quanpin);
 }
 
 } // namespace
@@ -611,16 +611,16 @@ const std::string &DefaultDbPath()
     return kPath;
 }
 
-std::vector<Segments> CutPinyinGreedy(const std::string &pinyin, bool is_intact, bool is_break)
+std::vector<Segments> CutQuanpinGreedy(const std::string &quanpin, bool is_intact, bool is_break)
 {
-    const auto &pinyin_set = is_intact ? IntactPinyinSet() : AllPinyinSet();
+    const auto &quanpin_set = is_intact ? IntactQuanpinSet() : AllQuanpinSet();
 
-    if (is_break && pinyin.find('\'') != std::string::npos)
+    if (is_break && quanpin.find('\'') != std::string::npos)
     {
         Segments merged;
-        for (const auto &part : Split(pinyin, '\''))
+        for (const auto &part : Split(quanpin, '\''))
         {
-            auto cut = CutPinyinGreedy(part, is_intact, false);
+            auto cut = CutQuanpinGreedy(part, is_intact, false);
             if (!cut.empty())
             {
                 merged.insert(merged.end(), cut.front().begin(), cut.front().end());
@@ -635,13 +635,13 @@ std::vector<Segments> CutPinyinGreedy(const std::string &pinyin, bool is_intact,
 
     Segments ans;
     size_t index = 0;
-    while (index < pinyin.size())
+    while (index < quanpin.size())
     {
         std::string matched;
-        for (size_t end = pinyin.size(); end > index; --end)
+        for (size_t end = quanpin.size(); end > index; --end)
         {
-            const auto piece = pinyin.substr(index, end - index);
-            if (pinyin_set.find(piece) != pinyin_set.end())
+            const auto piece = quanpin.substr(index, end - index);
+            if (quanpin_set.find(piece) != quanpin_set.end())
             {
                 matched = piece;
                 break;
@@ -657,7 +657,7 @@ std::vector<Segments> CutPinyinGreedy(const std::string &pinyin, bool is_intact,
     return {ans};
 }
 
-std::vector<Segments> CutPinyinByMode(const std::string &pinyin, const std::string &mode, const std::vector<FuzzyRule> &fuzzy_rules, bool is_break)
+std::vector<Segments> CutQuanpinByMode(const std::string &quanpin, const std::string &mode, const std::vector<FuzzyRule> &fuzzy_rules, bool is_break)
 {
     if (mode != "greedy" && mode != "correction" && mode != "fuzzy")
     {
@@ -665,12 +665,12 @@ std::vector<Segments> CutPinyinByMode(const std::string &pinyin, const std::stri
     }
 
     const auto &rules = fuzzy_rules.empty() ? DefaultFuzzyRules() : fuzzy_rules;
-    if (is_break && pinyin.find('\'') != std::string::npos)
+    if (is_break && quanpin.find('\'') != std::string::npos)
     {
         Segments merged;
-        for (const auto &part : Split(pinyin, '\''))
+        for (const auto &part : Split(quanpin, '\''))
         {
-            auto cut = CutPinyinByMode(part, mode, rules, false);
+            auto cut = CutQuanpinByMode(part, mode, rules, false);
             if (!cut.empty())
             {
                 merged.insert(merged.end(), cut.front().begin(), cut.front().end());
@@ -687,29 +687,29 @@ std::vector<Segments> CutPinyinByMode(const std::string &pinyin, const std::stri
         return {merged};
     }
 
-    return CutPinyinByModeNoBreak(pinyin, mode, rules);
+    return CutQuanpinByModeNoBreak(quanpin, mode, rules);
 }
 
-QueryResult QueryWords(const std::string &pinyin, const std::string &db_path, const std::string &mode, int limit)
+QueryResult QueryWords(const std::string &quanpin, const std::string &db_path, const std::string &mode, int limit)
 {
-    return QueryWordsProfiled(pinyin, db_path, mode, limit).result;
+    return QueryWordsProfiled(quanpin, db_path, mode, limit).result;
 }
 
-ProfiledQueryResult QueryWordsProfiled(const std::string &pinyin, const std::string &db_path, const std::string &mode, int limit)
+ProfiledQueryResult QueryWordsProfiled(const std::string &quanpin, const std::string &db_path, const std::string &mode, int limit)
 {
     const auto db_open_start = std::chrono::steady_clock::now();
     SqliteDb db(db_path);
     const auto db_open_elapsed = std::chrono::steady_clock::now() - db_open_start;
-    return QueryWordsProfiledWithDb(db, pinyin, mode, limit, db_open_elapsed);
+    return QueryWordsProfiledWithDb(db, quanpin, mode, limit, db_open_elapsed);
 }
 
 std::vector<ProfiledQueryResult> QueryWordsProfiledMany(
-    const std::vector<std::string> &pinyins,
+    const std::vector<std::string> &quanpins,
     const std::string &db_path,
     const std::string &mode,
     int limit)
 {
-    if (pinyins.empty())
+    if (quanpins.empty())
     {
         return {};
     }
@@ -719,18 +719,18 @@ std::vector<ProfiledQueryResult> QueryWordsProfiledMany(
     const auto db_open_elapsed = std::chrono::steady_clock::now() - db_open_start;
 
     std::vector<ProfiledQueryResult> profiled_results;
-    profiled_results.reserve(pinyins.size());
-    for (size_t i = 0; i < pinyins.size(); ++i)
+    profiled_results.reserve(quanpins.size());
+    for (size_t i = 0; i < quanpins.size(); ++i)
     {
         const auto open_elapsed = i == 0 ? db_open_elapsed : std::chrono::steady_clock::duration::zero();
-        profiled_results.push_back(QueryWordsProfiledWithDb(db, pinyins[i], mode, limit, open_elapsed));
+        profiled_results.push_back(QueryWordsProfiledWithDb(db, quanpins[i], mode, limit, open_elapsed));
     }
     return profiled_results;
 }
 
-std::vector<QueryItem> QueryWordsFlat(const std::string &pinyin, const std::string &db_path, const std::string &mode, int limit)
+std::vector<QueryItem> QueryWordsFlat(const std::string &quanpin, const std::string &db_path, const std::string &mode, int limit)
 {
-    const auto result = QueryWords(pinyin, db_path, mode, limit);
+    const auto result = QueryWords(quanpin, db_path, mode, limit);
     std::vector<QueryItem> items;
     std::unordered_set<std::string> seen;
     for (const auto &entry : result.results)
@@ -751,4 +751,4 @@ std::vector<QueryItem> QueryWordsFlat(const std::string &pinyin, const std::stri
     return items;
 }
 
-} // namespace pinyin
+} // namespace quanpin

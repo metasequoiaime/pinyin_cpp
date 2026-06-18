@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace pinyin {
+namespace quanpin {
 
 using Segments = std::vector<std::string>;
 using QueryItem = std::pair<std::string, int>;
@@ -21,7 +21,7 @@ struct QueryResultEntry {
 };
 
 struct QueryResult {
-    std::string pinyin;
+    std::string quanpin;
     std::string mode;
     std::vector<QueryResultEntry> results;
 };
@@ -87,36 +87,36 @@ auto MeasureQueryTime(Func&& func, Args&&... args)
     return TimedQueryResult<ResultType>{std::move(value), end - start};
 }
 
-std::vector<Segments> CutPinyinGreedy(const std::string& pinyin,
+std::vector<Segments> CutQuanpinGreedy(const std::string& quanpin,
                                       bool is_intact = false,
                                       bool is_break = true);
 
-std::vector<Segments> CutPinyinByMode(
-    const std::string& pinyin,
+std::vector<Segments> CutQuanpinByMode(
+    const std::string& quanpin,
     const std::string& mode = "greedy",
     const std::vector<FuzzyRule>& fuzzy_rules = {},
     bool is_break = true);
 
 QueryResult QueryWords(
-    const std::string& pinyin,
+    const std::string& quanpin,
     const std::string& db_path,
     const std::string& mode = "greedy",
     int limit = 8);
 
 ProfiledQueryResult QueryWordsProfiled(
-    const std::string& pinyin,
+    const std::string& quanpin,
     const std::string& db_path,
     const std::string& mode = "greedy",
     int limit = 8);
 
 std::vector<ProfiledQueryResult> QueryWordsProfiledMany(
-    const std::vector<std::string>& pinyins,
+    const std::vector<std::string>& quanpins,
     const std::string& db_path,
     const std::string& mode = "greedy",
     int limit = 8);
 
 std::vector<QueryItem> QueryWordsFlat(
-    const std::string& pinyin,
+    const std::string& quanpin,
     const std::string& db_path,
     const std::string& mode = "greedy",
     int limit = 8);
@@ -124,4 +124,4 @@ std::vector<QueryItem> QueryWordsFlat(
 const std::vector<FuzzyRule>& DefaultFuzzyRules();
 const std::string& DefaultDbPath();
 
-}  // namespace pinyin
+}  // namespace quanpin
