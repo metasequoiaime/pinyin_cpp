@@ -149,24 +149,13 @@ std::vector<std::string> DefaultQuanpins()
 
 std::vector<std::string> DefaultShuangpins()
 {
-    return {
-        "ufme",
-        "nage",
-        "yige",
-        "nimf",
-        "womf",
-        "vsgo",
-        "bwjk",
-        "jttm",
-        "mgtm",
-        "grzo",
-        "xtxi",
-        "uurufa",
-        "vdw",
-        "zm",
-        "ganm",
-        "yig",
-        "kanl"};
+    std::vector<std::string> shuangpins;
+    for (const auto &quanpin_input : DefaultQuanpins())
+    {
+        const auto shuangpin_input = shuangpin::ToShuangpinInput(quanpin_input);
+        shuangpins.push_back(shuangpin_input.empty() ? quanpin_input : shuangpin_input);
+    }
+    return shuangpins;
 }
 
 std::string QueryLabel(size_t index)

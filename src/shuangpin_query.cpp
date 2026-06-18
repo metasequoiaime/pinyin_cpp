@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include "quanpin_query.h"
+
 namespace shuangpin
 {
 namespace
@@ -60,6 +62,16 @@ const std::unordered_map<std::string, std::string> &ShengmuMap()
     return kMap;
 }
 
+const std::unordered_map<std::string, std::string> &ShengmuCodeMap()
+{
+    static const std::unordered_map<std::string, std::string> kMap = {
+        {"sh", "u"},
+        {"ch", "i"},
+        {"zh", "v"},
+    };
+    return kMap;
+}
+
 const std::unordered_map<std::string, std::string> &ZeroShengmuMap()
 {
     static const std::unordered_map<std::string, std::string> kMap = {
@@ -79,6 +91,14 @@ const std::unordered_map<std::string, std::string> &ZeroShengmuMap()
     return kMap;
 }
 
+const std::unordered_map<std::string, std::string> &ZeroShengmuCodeMap()
+{
+    static const std::unordered_map<std::string, std::string> kMap = {
+        {"a", "aa"},   {"ai", "ai"}, {"an", "an"}, {"ao", "ao"}, {"ang", "ah"}, {"e", "ee"},
+        {"ei", "ei"}, {"en", "en"}, {"eng", "eg"}, {"er", "er"}, {"o", "oo"},  {"ou", "ou"}};
+    return kMap;
+}
+
 const std::unordered_map<std::string, std::string> &YunmuMap()
 {
     static const std::unordered_map<std::string, std::string> kMap = {
@@ -87,6 +107,17 @@ const std::unordered_map<std::string, std::string> &YunmuMap()
         {"j", "an"}, {"k", "ing"},{"l", "iang"},{"z", "ou"},  {"x", "ia"}, {"c", "ao"}, {"v", "v"},  {"b", "in"},
         {"n", "iao"},{"m", "ian"},
     };
+    return kMap;
+}
+
+const std::unordered_map<std::string, std::string> &YunmuCodeMap()
+{
+    static const std::unordered_map<std::string, std::string> kMap = {
+        {"iu", "q"},  {"ei", "w"}, {"e", "e"},   {"uan", "r"}, {"ue", "t"}, {"ve", "t"}, {"un", "y"},
+        {"u", "u"},   {"i", "i"},  {"uo", "o"},  {"o", "o"},   {"ie", "p"}, {"a", "a"},  {"ong", "s"},
+        {"iong", "s"},{"ai", "d"}, {"en", "f"},  {"eng", "g"}, {"ang", "h"},{"an", "j"}, {"uai", "k"},
+        {"ing", "k"}, {"uang", "l"},{"iang", "l"},{"ou", "z"}, {"ua", "x"}, {"ia", "x"}, {"ao", "c"},
+        {"ui", "v"},  {"v", "v"},  {"in", "b"},  {"iao", "n"}, {"ian", "m"}};
     return kMap;
 }
 
@@ -181,6 +212,59 @@ std::string ConvertSingleShuangpinToQuanpin(const std::string &syllable)
     return IntactQuanpinSet().count(candidate) > 0 ? candidate : std::string{};
 }
 
+std::string ConvertSingleQuanpinToShuangpin(const std::string &syllable)
+{
+    if (syllable.size() == 1)
+    {
+        return syllable;
+    }
+
+    const auto &zero_map = ZeroShengmuCodeMap();
+    const auto zero_found = zero_map.find(syllable);
+    if (zero_found != zero_map.end())
+    {
+        return zero_found->second;
+    }
+
+    static const std::vector<std::string> kInitials = {
+        "zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g", "k",
+        "h",  "j",  "q",  "x", "r", "z", "c", "s", "y", "w"};
+
+    std::string shengmu;
+    std::string yunmu;
+    for (const auto &candidate : kInitials)
+    {
+        if (syllable.rfind(candidate, 0) == 0)
+        {
+            shengmu = candidate;
+            yunmu = syllable.substr(candidate.size());
+            break;
+        }
+    }
+
+    if (shengmu.empty() || yunmu.empty())
+    {
+        return {};
+    }
+
+    std::string shengmu_code = shengmu;
+    const auto &shengmu_code_map = ShengmuCodeMap();
+    const auto shengmu_found = shengmu_code_map.find(shengmu);
+    if (shengmu_found != shengmu_code_map.end())
+    {
+        shengmu_code = shengmu_found->second;
+    }
+
+    const auto &yunmu_code_map = YunmuCodeMap();
+    const auto yunmu_found = yunmu_code_map.find(yunmu);
+    if (yunmu_found == yunmu_code_map.end())
+    {
+        return {};
+    }
+
+    return shengmu_code + yunmu_found->second;
+}
+
 std::string ChooseTable(const std::string &shuangpin_code, size_t word_len)
 {
     if (shuangpin_code.empty())
@@ -258,14 +342,25 @@ std::pair<std::string, bool> BuildSql(const std::string &shuangpin_code, const S
 
     if (jianpin_count == 1)
     {
-        std::string pattern;
+        std::string lower_bound;
+        std::string upper_bound;
         for (const auto &segment : segments)
         {
-            pattern += segment.size() == 1 ? segment + "_" : segment;
+            if (segment.size() == 1)
+            {
+                lower_bound += segment + "a";
+                upper_bound += segment + "z";
+            }
+            else
+            {
+                lower_bound += segment;
+                upper_bound += segment;
+            }
         }
-        return {fmt::format("select * from {} where key like '{}' order by weight desc limit {};",
+        return {fmt::format("select * from {} where key >= '{}' and key <= '{}' order by weight desc limit {};",
                             table,
-                            pattern,
+                            lower_bound,
+                            upper_bound,
                             limit),
                 false};
     }
@@ -471,6 +566,27 @@ std::string ToQuanpinSegmentation(const std::string &segmented_input)
 std::string NormalizeInput(const std::string &raw_input)
 {
     return RemoveApostrophes(ToQuanpinSegmentation(SegmentInput(raw_input)));
+}
+
+std::string ToShuangpinInput(const std::string &quanpin_input)
+{
+    const auto cuts = quanpin::CutQuanpinByMode(quanpin_input, "correction");
+    if (cuts.empty())
+    {
+        return {};
+    }
+
+    std::string result;
+    for (const auto &syllable : cuts.front())
+    {
+        const auto converted = ConvertSingleQuanpinToShuangpin(syllable);
+        if (converted.empty())
+        {
+            return {};
+        }
+        result += converted;
+    }
+    return result;
 }
 
 ProfiledQueryResult QueryWordsProfiled(const std::string &shuangpin_code, const std::string &db_path, int limit)

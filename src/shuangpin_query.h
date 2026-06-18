@@ -38,6 +38,7 @@ struct ProfiledQueryResult {
 std::string SegmentInput(const std::string& raw_input);
 std::string ToQuanpinSegmentation(const std::string& segmented_input);
 std::string NormalizeInput(const std::string& raw_input);
+std::string ToShuangpinInput(const std::string& quanpin_input);
 
 ProfiledQueryResult QueryWordsProfiled(
     const std::string& shuangpin,
