@@ -4,9 +4,11 @@
 #include <chrono>
 #include <exception>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "quanpin_query.h"
+#include "shuangpin_query.h"
 
 namespace
 {
@@ -145,6 +147,28 @@ std::vector<std::string> DefaultQuanpins()
     };
 }
 
+std::vector<std::string> DefaultShuangpins()
+{
+    return {
+        "ufme",
+        "nage",
+        "yige",
+        "nimf",
+        "womf",
+        "vsgo",
+        "bwjk",
+        "jttm",
+        "mgtm",
+        "grzo",
+        "xtxi",
+        "uurufa",
+        "vdw",
+        "zm",
+        "ganm",
+        "yig",
+        "kanl"};
+}
+
 std::string QueryLabel(size_t index)
 {
     if (index == 0)
@@ -152,6 +176,15 @@ std::string QueryLabel(size_t index)
         return "first query";
     }
     return fmt::format("query #{} (same db connection, different quanpin, no open cost)", index + 1);
+}
+
+std::string ShuangpinQueryLabel(size_t index)
+{
+    if (index == 0)
+    {
+        return "first shuangpin query";
+    }
+    return fmt::format("shuangpin query #{} (same db connection, different input, no open cost)", index + 1);
 }
 
 void PrintProfile(const char *label, const quanpin::ProfiledQueryResult &profiled)
@@ -210,32 +243,79 @@ void PrintProfile(const char *label, const quanpin::ProfiledQueryResult &profile
     }
 }
 
+void PrintShuangpinProfile(const char *label, const shuangpin::ProfiledQueryResult &profiled)
+{
+    const auto &result = profiled.result;
+    const auto &profile = profiled.profile;
+
+    fmt::print("{}\n", label);
+    fmt::print("query \"{}\"\n", result.shuangpin);
+    fmt::print("segmentation: {}\n", result.segmentation.empty() ? "(empty)" : result.segmentation);
+    fmt::print("quanpin segmentation: {}\n", result.quanpin_segmentation.empty() ? "(empty)" : result.quanpin_segmentation);
+    fmt::print("normalized quanpin: {}\n", result.normalized_quanpin.empty() ? "(empty)" : result.normalized_quanpin);
+    fmt::print("table: {}\n", result.table.empty() ? "(none)" : result.table);
+    fmt::print("needs filtering: {}\n", result.needs_filtering ? "yes" : "no");
+    fmt::print("sql: {}\n", result.sql.empty() ? "(none)" : result.sql);
+    fmt::print("total: {:.3f} ms\n", ToMilliseconds(profile.total));
+    fmt::print(
+        "breakdown: segment={:.3f} ms, normalize={:.3f} ms, db_open={:.3f} ms, db_query={:.3f} ms, filter={:.3f} ms\n",
+        ToMilliseconds(profile.segment_elapsed),
+        ToMilliseconds(profile.normalize_elapsed),
+        ToMilliseconds(profile.db_open_elapsed),
+        ToMilliseconds(profile.db_query_elapsed),
+        ToMilliseconds(profile.filter_elapsed));
+    fmt::print("rows: {}\n", profile.row_count);
+    for (const auto &[key, value, weight] : result.rows)
+    {
+        fmt::print("key={} -> {} ({})\n", key, value, weight);
+    }
+}
+
 } // namespace
 
 int main()
 {
     std::vector<std::string> quanpins;
+    std::vector<std::string> shuangpins;
     std::string mode = "correction";
-    std::string db_path = quanpin::DefaultDbPath();
+    std::string quanpin_db_path = quanpin::DefaultDbPath();
+    std::string shuangpin_db_path = shuangpin::DefaultDbPath();
 
     quanpins = DefaultQuanpins();
+    shuangpins = DefaultShuangpins();
 
     try
     {
-        const auto profiled_results = quanpin::QueryWordsProfiledMany(
+        const auto quanpin_results = quanpin::QueryWordsProfiledMany(
             quanpins,
-            db_path,
+            quanpin_db_path,
             mode,
             80);
+        const auto shuangpin_results = shuangpin::QueryWordsProfiledMany(
+            shuangpins,
+            shuangpin_db_path,
+            80);
 
-        for (size_t i = 0; i < profiled_results.size(); ++i)
+        fmt::print("=== quanpin ===\n");
+        for (size_t i = 0; i < quanpin_results.size(); ++i)
         {
             if (i > 0)
             {
                 fmt::print("\n");
             }
             const auto label = QueryLabel(i);
-            PrintProfile(label.c_str(), profiled_results[i]);
+            PrintProfile(label.c_str(), quanpin_results[i]);
+        }
+
+        fmt::print("\n\n=== shuangpin ===\n");
+        for (size_t i = 0; i < shuangpin_results.size(); ++i)
+        {
+            if (i > 0)
+            {
+                fmt::print("\n");
+            }
+            const auto label = ShuangpinQueryLabel(i);
+            PrintShuangpinProfile(label.c_str(), shuangpin_results[i]);
         }
         return 0;
     }

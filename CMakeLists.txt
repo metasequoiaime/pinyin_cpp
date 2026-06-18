@@ -21,6 +21,7 @@ set(
   SOURCE_FILES
   "./src/main.cpp"
   "./src/quanpin_query.cpp"
+  "./src/shuangpin_query.cpp"
 )
 
 add_executable(${MY_EXECUTABLE_NAME} ${SOURCE_FILES})
