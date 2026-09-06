@@ -1,5 +1,12 @@
 # pinyin_cpp
 
+<!-- badges:start -->
+[![CI](https://img.shields.io/github/actions/workflow/status/metasequoiaime/pinyin_cpp/ci.yml?branch=main&label=CI)](https://github.com/metasequoiaime/pinyin_cpp/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/metasequoiaime/pinyin_cpp/codeql.yml?branch=main&label=CodeQL)](https://github.com/metasequoiaime/pinyin_cpp/actions/workflows/codeql.yml)
+[![License](https://img.shields.io/github/license/metasequoiaime/pinyin_cpp)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/metasequoiaime/pinyin_cpp?style=flat)](https://github.com/metasequoiaime/pinyin_cpp/stargazers)
+<!-- badges:end -->
+
 全拼 / 双拼候选查询的 C++ 早期原型，基于 SQLite 词库。
 
 **这个仓库已被取代，不再用于水杉输入法的开发。** 它保留下来是作为历史记录：全拼与双拼查询最早是在这里试出来的，之后才成为产品代码。
@@ -13,3 +20,11 @@
 - `tests/query_tests.cpp` — 原型自带的测试
 
 这些代码不参与任何产品构建，也不接受功能性改动。
+
+<!-- star-history:start -->
+## Star History
+
+<a href="https://star-history.com/#metasequoiaime/pinyin_cpp&Date">
+  <img src="https://api.star-history.com/svg?repos=metasequoiaime/pinyin_cpp&type=Date" alt="Star History Chart" width="600">
+</a>
+<!-- star-history:end -->
