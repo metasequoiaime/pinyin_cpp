@@ -1,6 +1,6 @@
 #include "shuangpin_query.h"
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <sqlite3.h>
 
 #include <algorithm>
@@ -123,6 +123,7 @@ const std::unordered_map<std::string, std::string> &YunmuCodeMap()
 
 std::string GetLocalAppDataPath()
 {
+#ifdef _WIN32
     char *raw_path = nullptr;
     size_t len = 0;
     const errno_t err = _dupenv_s(&raw_path, &len, "LOCALAPPDATA");
@@ -132,6 +133,10 @@ std::string GetLocalAppDataPath()
     }
     std::unique_ptr<char, decltype(&free)> holder(raw_path, free);
     return std::string(raw_path);
+#else
+    const char* raw_path = std::getenv("LOCALAPPDATA");
+    return raw_path ? std::string(raw_path) : std::string{};
+#endif
 }
 
 std::vector<std::string> Split(const std::string &text, char delimiter)
